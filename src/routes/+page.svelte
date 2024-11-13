@@ -1,150 +1,211 @@
 <script>
-    import { onMount } from "svelte";
-    import Plotly from "plotly.js-dist";
-    import proj4 from 'proj4';
+	import Plotly from 'plotly.js-dist';
+	import proj4 from 'proj4';
+	import { onMount } from 'svelte';
 
-    let mapDiv;
-    let selectedCRS = "utm32n"; // Default coordinate system
-  
-    // Base URL template with placeholders for {TileMatrixSet}
-    const tileURLTemplate = "https://cache.kartverket.no/topo/v1/wmts/1.0.0/default/{TileMatrixSet}/{z}/{y}/{x}.png";
-  
-    // Function to get the tile URL based on the selected CRS
-    function getTileURL(crs) {
-     
-        return tileURLTemplate.replace("{TileMatrixSet}", crs);
-    }
-    function getZoomLevel(crs) {
-    switch (crs) {
-      case "googlemaps":
-        return 6;  // Suitable zoom for global projection (Web Mercator)
-      case "utm32n":
-        return 5;  // Appropriate zoom for local UTM zone 32N (Norway)
-      case "utm33n":
-        return 5;  // Appropriate zoom for local UTM zone 33N (Norway)
-      default:
-        return 6;
-    }
-  }
-  let center = { lat: 60.472, lon: 8.4689 }; // Default to the geographic center of Norway
-  
-  function latLonToXY(lat, lon, crs) {
-  let projection;
+	const invoke = window.__TAURI__.core.invoke;
 
-  // Default to WGS84 for lat/lon
-  let transformed;
+	let xc = 596670;
+	let yc = 6646968;
+	let size = 250;
+	let resolution = 5;
 
-  switch (crs) {
-    case "googlemaps": // Web Mercator (EPSG:3857)
-      projection = "EPSG:3857"; // Web Mercator projection
-      transformed = proj4("WGS84", "EPSG:3857", [lon, lat]);  // Lat/Lon -> Web Mercator (x, y in meters)
-      break;
+	$: numpoints = (size / resolution) ** 2;
+	$: eta = numpoints / 8000;
+	async function test() {
+		var filename = 'download.ifc';
+		let file = await invoke('gen_ifc', {
+			xc,
+			yc,
+			width: size,
+			height: size,
+			resolution,
+			coordSys: 32632
+		});
+		var array = new Uint8Array(file);
 
-    case "utm32n": // UTM Zone 32N (Norway)
-      // UTM Zone 32N projection, converting from Lat/Lon (WGS84) to UTM
-      projection = "+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs"; // UTM 32N
-      transformed = proj4("WGS84", projection, [lon, lat]); // Lat/Lon -> UTM (meters)
-      break;
+		var string = new TextDecoder().decode(array);
+		var blob = new Blob([string], { type: 'text/plain' });
 
-    case "utm33n": // UTM Zone 33N (Norway)
-      // UTM Zone 33N projection, converting from Lat/Lon (WGS84) to UTM
-      projection = "+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"; // UTM 33N
-      transformed = proj4("WGS84", projection, [lon, lat]); // Lat/Lon -> UTM (meters)
-      break;
+		if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+		} else {
+			var e = document.createEvent('MouseEvents'),
+				a = document.createElement('a');
+			a.download = filename;
+			a.href = window.URL.createObjectURL(blob);
+			a.dataset.downloadurl = ['text/plain', a.download, a.href].join(':');
+			e.initEvent('click', true, false, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
+			a.dispatchEvent(e);
+		}
+	}
 
-    default:
-      transformed = proj4("WGS84", "EPSG:3857", [lon, lat]);
-      break;
-  }
+	let mapDiv;
+	let selectedCRS = 'utm32n'; // Default coordinate system
+	const tileURLTemplate =
+		'https://cache.kartverket.no/topo/v1/wmts/1.0.0/default/googlemaps/{z}/{y}/{x}.png';
 
-  // Log x and y values for debugging
-  console.log(`Transformed Coordinates [${crs}]:`, { x: transformed[0], y: transformed[1] });
+	const googlemaps = 'EPSG:4326';
+	const utm32n = '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs';
+	const utm33n = '+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs';
+	const [lons, lats] = proj4(utm32n, googlemaps, [xc, yc]);
 
-  return transformed; // Returns the transformed [x, y] coordinates
-}
+	const layout = {
+		mapbox: {
+			style: 'white-bg',
+			center: { lat: lats, lon: lons },
+			zoom: 16,
+			layers: [
+				{
+					sourcetype: 'raster',
+					source: [tileURLTemplate],
+					below: 'traces'
+				}
+			]
+		},
+		margin: { t: 0, r: 0, b: 0, l: 0 }
+	};
+	const config = { scrollZoom: true };
+	let center = { lat: 60.472, lon: 8.4689 }; // Default to the geographic center of Norway
+	// Function to convert lat/lon to x/y based on a given CRS
+	function latLonToXY(lat, lon, crs) {
+		let projection;
 
-    // Plotly map setup function
-    function createMap() {
-        const zoom = getZoomLevel(selectedCRS);
+		switch (crs) {
+			case 'googlemaps':
+				projection = googlemaps;
+				break;
+			case 'utm32n':
+				projection = utm32n;
+				break;
+			case 'utm33n':
+				projection = utm33n;
+				break;
+			default:
+				throw new Error("Unsupported CRS. Choose 'googlemaps', 'utm32n', or 'utm33n'.");
+		}
 
-        const [x, y] = latLonToXY(center.lat, center.lon, selectedCRS);
+		// Transform from WGS84 to the selected projection
+		const [x, y] = proj4(googlemaps, projection, [lon, lat]);
+		console.log(`latLonToXY: lat=${lat}, lon=${lon} in ${crs} => x=${x}, y=${y}`);
+		return [x, y];
+	}
 
-      const data = [
-        {
-          type: "scattermapbox",
-          x: [x],  // Plot in local x (projected coordinates)
-          y: [y],  // Plot in local y (projected coordinates)
-          mode: "markers+text",
-          text: ["Norway Center"],
-          marker: { size: 10, color: "blue" },
-        },
-      ];
-  
-      const layout = {
-        mapbox: {
-          style: "white-bg",
-          center: { lat: 60.472, lon: 8.4689 },
-          zoom: 5,
-          layers: [
-            {
-              sourcetype: "raster",
-              source: [getTileURL(selectedCRS)],
-              below: "traces",
-            },
-          ],
-        },
-        margin: { t: 0, r: 0, b: 0, l: 0 },
-      };
-  
-      Plotly.newPlot(mapDiv, data, layout);
-    }
-  
-    // Update map when CRS changes
-    function updateMap() {
-        const zoom = getZoomLevel(selectedCRS);
-        const [x, y] = latLonToXY(center.lat, center.lon, selectedCRS);
+	// Function to convert x/y back to lat/lon for UTM zones
+	function xyToLatLon(x, y, crs) {
+		let projection;
+		switch (crs) {
+			case 'googlemaps':
+				projection = googlemaps;
+				break;
+			case 'utm32n':
+				projection = utm32n;
+				break;
+			case 'utm33n':
+				projection = utm33n;
+				break;
+			default:
+				throw new Error('Unsupported CRS for UTM.');
+		}
+		// Transform from WGS84 to the selected projection
+		const [lon, lat] = proj4(projection, googlemaps, [x, y]);
+		console.log(`xyToLatLon: x=${x}, y=${y} in ${crs} => lat=${lat}, lon=${lon}`);
+		return [lat, lon];
+	}
+	// Plotly map setup function
+	function createMap() {
+		Plotly.newPlot(mapDiv, [], layout, config);
+	}
 
-      const newSource = [getTileURL(selectedCRS)];
-      Plotly.relayout(mapDiv, "mapbox.layers[0].source", newSource);
-        Plotly.relayout(mapDiv, {
-        "mapbox.zoom": zoom,          
-        "mapbox.center": { lat: 60.472, lon: 8.4689 },
-        });
-    }
-  
-    // Initialize the map on mount
-    onMount(() => {
-      createMap();
-    });
-  </script>
-  
-  <style>
-    #map-container {
-      display: flex;
-    }
-    #map {
-      width: 80%;
-      height: 100vh;
-    }
-    #controls {
-      width: 20%;
-      padding: 10px;
-      background-color: #f5f5f5;
-    }
-  </style>
-  
-  <div id="map-container">
-    <!-- Map Container -->
-    <div id="map" bind:this={mapDiv}></div>
-  
-    <!-- Sidebar for CRS Selector -->
-    <div id="controls">
-      <label for="crs-select">Select Coordinate System:</label>
-      <select id="crs-select" bind:value={selectedCRS} on:change={updateMap}>
-        <option value="googlemaps">EPSG:3857 (Web Mercator)</option>
-        <option value="utm32n">UTM Zone 32N</option>
-        <option value="utm33n">UTM Zone 33N</option>
-      </select>
-    </div>
-  </div>
-  
+	// Update the plotted point on the map
+	function updatePlotPoint() {
+		const [plotLat, plotLon] = xyToLatLon(xc, yc, selectedCRS);
+		const latLonCorners = [
+			xyToLatLon(xc - size / 2, yc + size / 2, 'utm32n'),
+			xyToLatLon(xc + size / 2, yc + size / 2, 'utm32n'),
+			xyToLatLon(xc + size / 2, yc - size / 2, 'utm32n'),
+			xyToLatLon(xc - size / 2, yc - size / 2, 'utm32n'),
+			xyToLatLon(xc - size / 2, yc + size / 2, 'utm32n')
+		];
+
+		// Define the trace (polygon)
+		const trace = {
+			type: 'scattermapbox',
+			mode: 'lines',
+			fill: 'toself',
+			lat: latLonCorners.map((coord) => coord[0]),
+			lon: latLonCorners.map((coord) => coord[1]),
+			line: { color: 'red', width: 2 },
+			fillcolor: 'rgba(255, 0, 0, 0.3)' // Transparent red fill
+		};
+		// Update the Plotly scatter point
+		Plotly.react(
+			mapDiv,
+			[
+				{
+					type: 'scattermapbox',
+					mode: 'markers',
+					lat: [plotLat],
+					lon: [plotLon],
+					marker: { size: 10, color: 'red' }
+				},
+				trace
+			],
+			layout
+		);
+	}
+
+	// Event handler for changing coordinates
+	function onCoordinateChange() {
+		updatePlotPoint();
+	}
+	// Initialize the map on mount
+	onMount(() => {
+		createMap();
+		updatePlotPoint();
+	});
+</script>
+
+<div id="map-container">
+	<!-- Map Container -->
+	<div id="map" bind:this={mapDiv}></div>
+
+	<!-- Sidebar for CRS Selector -->
+	<div id="controls">
+		<input type="number" bind:value={xc} step={1} on:change={onCoordinateChange} />
+		<input type="number" bind:value={yc} step={1} on:change={onCoordinateChange} />
+		<input type="number" bind:value={size} step={50} on:change={onCoordinateChange} />
+		<input type="number" bind:value={resolution} step={1} />
+		<p>{numpoints.toFixed(0)} punkter / est. {eta.toFixed(1)}s</p>
+		<select id="crs-select" bind:value={selectedCRS}>
+			<option value="googlemaps">EPSG:3857 (Web Mercator)</option>
+			<option value="utm32n">UTM Zone 32N</option>
+			<option value="utm33n">UTM Zone 33N</option>
+		</select>
+		<div><button on:click={test}>Generer</button></div>
+	</div>
+</div>
+
+<style>
+	/* Prevent scrolling on the whole page */
+	body {
+		height: 100%;
+		background-color: red;
+	}
+	#map-container {
+		display: flex;
+		height: 100%; /* Fill the entire height of the page */
+	}
+
+	#map {
+		width: 80%;
+		height: 100%; /* Ensure the map takes up the full height */
+	}
+
+	#controls {
+		width: 20%;
+		padding: 10px;
+		background-color: #f5f5f5;
+		height: 100%; /* Ensure sidebar takes up full height */
+		overflow-y: auto; /* Allow scrolling inside the sidebar if needed */
+	}
+</style>
