@@ -1,9 +1,11 @@
 <script>
+	import Numberinput from '$lib/numberinput.svelte';
 	import Plotly from 'plotly.js-dist';
 	import proj4 from 'proj4';
 	import { onMount } from 'svelte';
 
 	const invoke = window.__TAURI__.core.invoke;
+	let loading = false; // state to track loading status
 
 	let xc = 596670;
 	let yc = 6646968;
@@ -13,6 +15,8 @@
 	$: numpoints = (size / resolution) ** 2;
 	$: eta = numpoints / 8000;
 	async function test() {
+		loading = true; // Start loading
+
 		var filename = 'download.ifc';
 		let file = await invoke('gen_ifc', {
 			xc,
@@ -37,8 +41,22 @@
 			e.initEvent('click', true, false, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
 			a.dispatchEvent(e);
 		}
+		loading = false; // End loading
 	}
+	function test2() {
+		const mapCenter = layout.mapbox.center;
+		const centerLat = mapCenter.lat;
+		const centerLon = mapCenter.lon;
 
+		// Convert the map center from lat/lon to the selected CRS (e.g., UTM)
+		const [newX, newY] = latLonToXY(centerLat, centerLon, selectedCRS);
+
+		// Update the rectangle's center coordinates
+		xc = newX;
+		yc = newY;
+
+		onCoordinateChange();
+	}
 	let mapDiv;
 	let selectedCRS = 'utm32n'; // Default coordinate system
 	const tileURLTemplate =
@@ -62,7 +80,11 @@
 				}
 			]
 		},
-		margin: { t: 0, r: 0, b: 0, l: 0 }
+		margin: { t: 0, r: 0, b: 0, l: 0 },
+		showlegend: false,
+		clickmode: 'event',
+		dragmode: 'zoom',
+		hovermode: 'closest'
 	};
 	const config = { scrollZoom: true };
 	let center = { lat: 60.472, lon: 8.4689 }; // Default to the geographic center of Norway
@@ -86,7 +108,6 @@
 
 		// Transform from WGS84 to the selected projection
 		const [x, y] = proj4(googlemaps, projection, [lon, lat]);
-		console.log(`latLonToXY: lat=${lat}, lon=${lon} in ${crs} => x=${x}, y=${y}`);
 		return [x, y];
 	}
 
@@ -108,7 +129,6 @@
 		}
 		// Transform from WGS84 to the selected projection
 		const [lon, lat] = proj4(projection, googlemaps, [x, y]);
-		console.log(`xyToLatLon: x=${x}, y=${y} in ${crs} => lat=${lat}, lon=${lon}`);
 		return [lat, lon];
 	}
 	// Plotly map setup function
@@ -138,74 +158,150 @@
 			fillcolor: 'rgba(255, 0, 0, 0.3)' // Transparent red fill
 		};
 		// Update the Plotly scatter point
-		Plotly.react(
-			mapDiv,
-			[
-				{
-					type: 'scattermapbox',
-					mode: 'markers',
-					lat: [plotLat],
-					lon: [plotLon],
-					marker: { size: 10, color: 'red' }
-				},
-				trace
-			],
-			layout
-		);
+		Plotly.react(mapDiv, [trace], layout, config);
 	}
 
 	// Event handler for changing coordinates
 	function onCoordinateChange() {
 		updatePlotPoint();
 	}
+
 	// Initialize the map on mount
 	onMount(() => {
 		createMap();
+
 		updatePlotPoint();
 	});
 </script>
 
+<div id="header"></div>
 <div id="map-container">
+	<!-- Sidebar for CRS Selector -->
+
 	<!-- Map Container -->
 	<div id="map" bind:this={mapDiv}></div>
+</div>
+<div id="controls">
+	Kartinnstillinger
 
-	<!-- Sidebar for CRS Selector -->
-	<div id="controls">
-		<input type="number" bind:value={xc} step={1} on:change={onCoordinateChange} />
-		<input type="number" bind:value={yc} step={1} on:change={onCoordinateChange} />
-		<input type="number" bind:value={size} step={50} on:change={onCoordinateChange} />
-		<input type="number" bind:value={resolution} step={1} />
-		<p>{numpoints.toFixed(0)} punkter / est. {eta.toFixed(1)}s</p>
-		<select id="crs-select" bind:value={selectedCRS}>
-			<option value="googlemaps">EPSG:3857 (Web Mercator)</option>
-			<option value="utm32n">UTM Zone 32N</option>
-			<option value="utm33n">UTM Zone 33N</option>
-		</select>
-		<div><button on:click={test}>Generer</button></div>
-	</div>
+	<select id="crs-select" bind:value={selectedCRS}>
+		<option value="googlemaps">EPSG:3857 (Web Mercator)</option>
+		<option value="utm32n">UTM Zone 32N</option>
+		<option value="utm33n">UTM Zone 33N</option>
+	</select>
+	<span>
+		<Numberinput label="X (m)" bind:value={xc} change={onCoordinateChange} />
+		<Numberinput label="Y (m)" bind:value={yc} change={onCoordinateChange} />
+	</span>
+	<span>
+		<Numberinput label="Størrelse (m)" bind:value={size} change={onCoordinateChange} />
+		<Numberinput label="Oppløsning (m)" bind:value={resolution} change={null} />
+	</span>
+
+	<p>{numpoints.toFixed(0)} punkter / est. {eta.toFixed(1)}s</p>
+	<span
+		><button on:click={test2}>Sentrer kart</button>
+		<button on:click={test}>
+			{#if loading}
+				<div class="spinner"></div>
+			{:else}
+				Generer
+			{/if}</button
+		>
+	</span>
 </div>
 
 <style>
 	/* Prevent scrolling on the whole page */
-	body {
-		height: 100%;
-		background-color: red;
+	#header {
+		width: 100%;
+		background-color: #5e5e5e;
+		height: 50px;
+		box-shadow:
+			rgba(0, 0, 0, 0.12) 0px 1px 10px 0px,
+			rgba(0, 0, 0, 0.14) 0px 4px 5px 0px,
+			rgba(0, 0, 0, 0.2) 0px 2px 4px -1px;
+		box-sizing: border-box;
+		position: fixed;
+		z-index: 1000;
 	}
 	#map-container {
+		top: 50px;
+
 		display: flex;
+		position: absolute;
+		width: 100%;
 		height: 100%; /* Fill the entire height of the page */
 	}
 
 	#map {
-		width: 80%;
+		width: 100%;
 		height: 100%; /* Ensure the map takes up the full height */
+	}
+	span {
+		display: flex;
+		flex-direction: row;
+		justify-content: space-between;
 	}
 
 	#controls {
-		width: 20%;
+		left: 10px;
+		top: 60px;
+		position: relative;
+		border-radius: 5px;
+		z-index: 2;
+		width: 200px;
 		padding: 10px;
-		background-color: #f5f5f5;
+		background-color: #ffffff;
 		height: 100%; /* Ensure sidebar takes up full height */
-		overflow-y: auto; /* Allow scrolling inside the sidebar if needed */
+	}
+	p {
+		font-size: 0.5em;
+		display: inline-block;
+		width: 96%;
+		text-align: end;
+	}
+
+	button {
+		background-color: #0073d1;
+		color: white;
+		border: 0px;
+		border-radius: 4px;
+		padding: 0.5em;
+		transition-duration: 0.25s;
+		display: flex;
+		flex: 1;
+		flex-direction: row;
+		justify-content: center;
+	}
+	button:hover {
+		background-color: #005192;
+		cursor: pointer;
+		transition-duration: 0.25s;
+	}
+
+	span {
+		flex-direction: row;
+		justify-content: space-between;
+		gap: 10px; /* Add a gap between the buttons */
+	}
+	.spinner {
+		border: 4px solid #f3f3f3; /* Light grey */
+		border-top: 4px solid #3498db; /* Blue */
+		border-radius: 50%;
+		width: 10px;
+		height: 10px;
+		animation: spin 2s linear infinite;
+		position: absolute;
+	}
+
+	/* Keyframe for spinner animation */
+	@keyframes spin {
+		0% {
+			transform: rotate(0deg);
+		}
+		100% {
+			transform: rotate(360deg);
+		}
 	}
 </style>
