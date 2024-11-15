@@ -58,6 +58,7 @@
 		onCoordinateChange();
 	}
 	let mapDiv;
+	let parentDiv;
 	let selectedCRS = 'utm32n'; // Default coordinate system
 	const tileURLTemplate =
 		'https://cache.kartverket.no/topo/v1/wmts/1.0.0/default/googlemaps/{z}/{y}/{x}.png';
@@ -165,17 +166,23 @@
 	function onCoordinateChange() {
 		updatePlotPoint();
 	}
+	let resizeObserver;
 
 	// Initialize the map on mount
 	onMount(() => {
 		createMap();
 
-		updatePlotPoint();
+		updatePlotPoint(); // Observe changes in parent container size
+		const parentDiv = mapDiv.parentElement;
+		resizeObserver = new ResizeObserver(() => {
+			Plotly.Plots.resize(mapDiv);
+		});
+		resizeObserver.observe(parentDiv);
 	});
 </script>
 
 <div id="header"></div>
-<div id="map-container">
+<div id="map-container" bind:this={parentDiv}>
 	<!-- Sidebar for CRS Selector -->
 
 	<!-- Map Container -->
