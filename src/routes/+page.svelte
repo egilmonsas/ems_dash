@@ -7,13 +7,90 @@
 	const invoke = window.__TAURI__.core.invoke;
 	let loading = false; // state to track loading status
 
+	// Declarations
+	let mapDiv;
+	let parentDiv;
+	let resizeObserver;
+	const googlemaps = 'EPSG:4326';
+	const utm32n = '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs';
+	const utm33n = '+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs';
+	const tileURLTemplate =
+		'https://cache.kartverket.no/topo/v1/wmts/1.0.0/default/googlemaps/{z}/{y}/{x}.png';
+
+	// Initial state
 	let xc = 596670;
 	let yc = 6646968;
 	let size = 250;
 	let resolution = 5;
-
 	$: numpoints = (size / resolution) ** 2;
 	$: eta = numpoints / 8000;
+	let selectedCRS = 'utm32n'; // Default coordinate system
+	const [lons, lats] = proj4(utm32n, googlemaps, [xc, yc]);
+
+	// Functions
+	function latLonToXY(lat, lon, crs) {
+		let projection;
+
+		switch (crs) {
+			case 'googlemaps':
+				projection = googlemaps;
+				break;
+			case 'utm32n':
+				projection = utm32n;
+				break;
+			case 'utm33n':
+				projection = utm33n;
+				break;
+			default:
+				throw new Error("Unsupported CRS. Choose 'googlemaps', 'utm32n', or 'utm33n'.");
+		}
+
+		const [x, y] = proj4(googlemaps, projection, [lon, lat]);
+		return [x, y];
+	}
+	function xyToLatLon(x, y, crs) {
+		let projection;
+		switch (crs) {
+			case 'googlemaps':
+				projection = googlemaps;
+				break;
+			case 'utm32n':
+				projection = utm32n;
+				break;
+			case 'utm33n':
+				projection = utm33n;
+				break;
+			default:
+				throw new Error('Unsupported CRS for UTM.');
+		}
+		const [lon, lat] = proj4(projection, googlemaps, [x, y]);
+		return [lat, lon];
+	}
+	function createMap() {
+		Plotly.newPlot(mapDiv, [], layout, config);
+	}
+	function updatePlotPoint() {
+		const [plotLat, plotLon] = xyToLatLon(xc, yc, selectedCRS);
+		const latLonCorners = [
+			xyToLatLon(xc - size / 2, yc + size / 2, 'utm32n'),
+			xyToLatLon(xc + size / 2, yc + size / 2, 'utm32n'),
+			xyToLatLon(xc + size / 2, yc - size / 2, 'utm32n'),
+			xyToLatLon(xc - size / 2, yc - size / 2, 'utm32n'),
+			xyToLatLon(xc - size / 2, yc + size / 2, 'utm32n')
+		];
+
+		const trace = {
+			type: 'scattermapbox',
+			mode: 'lines',
+			fill: 'toself',
+			lat: latLonCorners.map((coord) => coord[0]),
+			lon: latLonCorners.map((coord) => coord[1]),
+			line: { color: 'red', width: 2 },
+			fillcolor: 'rgba(255, 0, 0, 0.3)' // Transparent red fill
+		};
+		Plotly.react(mapDiv, [trace], layout, config);
+	}
+	// API
 	async function test() {
 		loading = true; // Start loading
 
@@ -57,17 +134,8 @@
 
 		onCoordinateChange();
 	}
-	let mapDiv;
-	let parentDiv;
-	let selectedCRS = 'utm32n'; // Default coordinate system
-	const tileURLTemplate =
-		'https://cache.kartverket.no/topo/v1/wmts/1.0.0/default/googlemaps/{z}/{y}/{x}.png';
 
-	const googlemaps = 'EPSG:4326';
-	const utm32n = '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs';
-	const utm33n = '+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs';
-	const [lons, lats] = proj4(utm32n, googlemaps, [xc, yc]);
-
+	// Config
 	const layout = {
 		mapbox: {
 			style: 'white-bg',
@@ -88,87 +156,13 @@
 		hovermode: 'closest'
 	};
 	const config = { scrollZoom: true };
-	let center = { lat: 60.472, lon: 8.4689 }; // Default to the geographic center of Norway
-	// Function to convert lat/lon to x/y based on a given CRS
-	function latLonToXY(lat, lon, crs) {
-		let projection;
 
-		switch (crs) {
-			case 'googlemaps':
-				projection = googlemaps;
-				break;
-			case 'utm32n':
-				projection = utm32n;
-				break;
-			case 'utm33n':
-				projection = utm33n;
-				break;
-			default:
-				throw new Error("Unsupported CRS. Choose 'googlemaps', 'utm32n', or 'utm33n'.");
-		}
-
-		// Transform from WGS84 to the selected projection
-		const [x, y] = proj4(googlemaps, projection, [lon, lat]);
-		return [x, y];
-	}
-
-	// Function to convert x/y back to lat/lon for UTM zones
-	function xyToLatLon(x, y, crs) {
-		let projection;
-		switch (crs) {
-			case 'googlemaps':
-				projection = googlemaps;
-				break;
-			case 'utm32n':
-				projection = utm32n;
-				break;
-			case 'utm33n':
-				projection = utm33n;
-				break;
-			default:
-				throw new Error('Unsupported CRS for UTM.');
-		}
-		// Transform from WGS84 to the selected projection
-		const [lon, lat] = proj4(projection, googlemaps, [x, y]);
-		return [lat, lon];
-	}
-	// Plotly map setup function
-	function createMap() {
-		Plotly.newPlot(mapDiv, [], layout, config);
-	}
-
-	// Update the plotted point on the map
-	function updatePlotPoint() {
-		const [plotLat, plotLon] = xyToLatLon(xc, yc, selectedCRS);
-		const latLonCorners = [
-			xyToLatLon(xc - size / 2, yc + size / 2, 'utm32n'),
-			xyToLatLon(xc + size / 2, yc + size / 2, 'utm32n'),
-			xyToLatLon(xc + size / 2, yc - size / 2, 'utm32n'),
-			xyToLatLon(xc - size / 2, yc - size / 2, 'utm32n'),
-			xyToLatLon(xc - size / 2, yc + size / 2, 'utm32n')
-		];
-
-		// Define the trace (polygon)
-		const trace = {
-			type: 'scattermapbox',
-			mode: 'lines',
-			fill: 'toself',
-			lat: latLonCorners.map((coord) => coord[0]),
-			lon: latLonCorners.map((coord) => coord[1]),
-			line: { color: 'red', width: 2 },
-			fillcolor: 'rgba(255, 0, 0, 0.3)' // Transparent red fill
-		};
-		// Update the Plotly scatter point
-		Plotly.react(mapDiv, [trace], layout, config);
-	}
-
-	// Event handler for changing coordinates
+	// Event handlers
 	function onCoordinateChange() {
 		updatePlotPoint();
 	}
-	let resizeObserver;
 
-	// Initialize the map on mount
+	// Initialization
 	onMount(() => {
 		createMap();
 
