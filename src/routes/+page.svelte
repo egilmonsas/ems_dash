@@ -11,12 +11,121 @@
 	let mapDiv;
 	let parentDiv;
 	let resizeObserver;
-	const googlemaps = 'EPSG:4326';
-	const utm32n = '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs';
-	const utm33n = '+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs';
+	let showPanel = false;
+
 	const tileURLTemplate =
 		'https://cache.kartverket.no/topo/v1/wmts/1.0.0/default/googlemaps/{z}/{y}/{x}.png';
 
+	const crsConfig = {
+		googlemaps: { proj: 'EPSG:4326', sys: 4326 },
+		'UTM 32N': { proj: '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs', sys: 32632 },
+		'UTM 33N': { proj: '+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs', sys: 32633 },
+		'UTM 35N': { proj: '+proj=utm +zone=35 +datum=WGS84 +units=m +no_defs', sys: 32633 },
+		'NTM 5': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=5.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5105
+		},
+		'NTM 6': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=6.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5106
+		},
+		'NTM 7': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=7.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5107
+		},
+		'NTM 8': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=8.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5108
+		},
+		'NTM 9': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=9.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5109
+		},
+		'NTM 10': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=10.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5110
+		},
+		'NTM 11': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=11.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5111
+		},
+		'NTM 12': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=12.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5112
+		},
+		'NTM 13': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=13.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5113
+		},
+		'NTM 14': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=14.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5114
+		},
+		'NTM 15': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=15.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5115
+		},
+		'NTM 16': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=16.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5116
+		},
+		'NTM 17': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=17.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5117
+		},
+		'NTM 18': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=18.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5118
+		},
+		'NTM 19': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=19.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5118
+		},
+		'NTM 20': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=20.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5118
+		},
+		'NTM 21': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=21.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5118
+		},
+		'NTM 22': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=22.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5118
+		},
+		'NTM 23': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=23.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5118
+		},
+		'NTM 24': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=24.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5118
+		},
+		'NTM 25': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=25.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5118
+		},
+		'NTM 26': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=26.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5118
+		},
+		'NTM 27': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=27.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5118
+		},
+		'NTM 28': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=28.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5118
+		},
+		'NTM 29': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=29.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5118
+		},
+		'NTM 30': {
+			proj: '+proj=tmerc +lat_0=58 +lon_0=30.5 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs',
+			sys: 5118
+		}
+	};
 	// Initial state
 	let xc = 596670;
 	let yc = 6646968;
@@ -24,61 +133,33 @@
 	let resolution = 5;
 	$: numpoints = (size / resolution) ** 2;
 	$: eta = numpoints / 8000;
-	let selectedCRS = 'utm32n'; // Default coordinate system
-	const [lons, lats] = proj4(utm32n, googlemaps, [xc, yc]);
+	let selectedCRS = 'UTM 32N';
+	let baseCRS = 'googlemaps';
+	let previousCRS = selectedCRS;
+
+	const [lats, lons] = xyToLatLon(xc, yc, selectedCRS);
 
 	// Functions
 	function latLonToXY(lat, lon, crs) {
-		let projection;
-
-		switch (crs) {
-			case 'googlemaps':
-				projection = googlemaps;
-				break;
-			case 'utm32n':
-				projection = utm32n;
-				break;
-			case 'utm33n':
-				projection = utm33n;
-				break;
-			default:
-				throw new Error("Unsupported CRS. Choose 'googlemaps', 'utm32n', or 'utm33n'.");
-		}
-
-		const [x, y] = proj4(googlemaps, projection, [lon, lat]);
+		const [x, y] = proj4(crsConfig[baseCRS].proj, crsConfig[crs].proj, [lon, lat]);
 		return [x, y];
 	}
 	function xyToLatLon(x, y, crs) {
-		let projection;
-		switch (crs) {
-			case 'googlemaps':
-				projection = googlemaps;
-				break;
-			case 'utm32n':
-				projection = utm32n;
-				break;
-			case 'utm33n':
-				projection = utm33n;
-				break;
-			default:
-				throw new Error('Unsupported CRS for UTM.');
-		}
-		const [lon, lat] = proj4(projection, googlemaps, [x, y]);
+		const [lon, lat] = proj4(crsConfig[crs].proj, crsConfig[baseCRS].proj, [x, y]);
 		return [lat, lon];
 	}
 	function createMap() {
 		Plotly.newPlot(mapDiv, [], layout, config);
 	}
 	function updatePlotPoint() {
-		const [plotLat, plotLon] = xyToLatLon(xc, yc, selectedCRS);
 		const latLonCorners = [
-			xyToLatLon(xc - size / 2, yc + size / 2, 'utm32n'),
-			xyToLatLon(xc + size / 2, yc + size / 2, 'utm32n'),
-			xyToLatLon(xc + size / 2, yc - size / 2, 'utm32n'),
-			xyToLatLon(xc - size / 2, yc - size / 2, 'utm32n'),
-			xyToLatLon(xc - size / 2, yc + size / 2, 'utm32n')
+			xyToLatLon(xc - size / 2, yc + size / 2, selectedCRS),
+			xyToLatLon(xc + size / 2, yc + size / 2, selectedCRS),
+			xyToLatLon(xc + size / 2, yc - size / 2, selectedCRS),
+			xyToLatLon(xc - size / 2, yc - size / 2, selectedCRS),
+			xyToLatLon(xc - size / 2, yc + size / 2, selectedCRS)
 		];
-
+		console.log(latLonCorners);
 		const trace = {
 			type: 'scattermapbox',
 			mode: 'lines',
@@ -91,17 +172,18 @@
 		Plotly.react(mapDiv, [trace], layout, config);
 	}
 	// API
-	async function test() {
+	async function generateIFC() {
 		loading = true; // Start loading
 
 		var filename = 'download.ifc';
+		console.log(crsConfig[baseCRS].sys);
 		let file = await invoke('gen_ifc', {
 			xc,
 			yc,
 			width: size,
 			height: size,
 			resolution,
-			coordSys: 32632
+			coordSys: crsConfig[selectedCRS].sys
 		});
 		var array = new Uint8Array(file);
 
@@ -120,7 +202,7 @@
 		}
 		loading = false; // End loading
 	}
-	function test2() {
+	function moveRectangle() {
 		const mapCenter = layout.mapbox.center;
 		const centerLat = mapCenter.lat;
 		const centerLon = mapCenter.lon;
@@ -129,8 +211,8 @@
 		const [newX, newY] = latLonToXY(centerLat, centerLon, selectedCRS);
 
 		// Update the rectangle's center coordinates
-		xc = newX;
-		yc = newY;
+		xc = Math.round(newX);
+		yc = Math.round(newY);
 
 		onCoordinateChange();
 	}
@@ -161,7 +243,60 @@
 	function onCoordinateChange() {
 		updatePlotPoint();
 	}
+	// Event handlers
+	function handlePaste(event) {
+		event.preventDefault();
+		const pastedData = event.clipboardData.getData('Text');
+		const rows = pastedData.split('\n');
 
+		Coordinates = rows.map((row) => {
+			const cols = row.split('\t');
+			return {
+				x: cols[0] || '',
+				y: cols[1] || ''
+			};
+		});
+	}
+	function onPanelClick() {
+		showPanel = !showPanel;
+	}
+	function onCRSChange() {
+		const [plotLat, plotLon] = xyToLatLon(xc, yc, previousCRS);
+		[xc, yc] = latLonToXY(plotLat, plotLon, selectedCRS);
+		xc = Math.round(xc);
+		yc = Math.round(yc);
+		updatePlotPoint();
+		previousCRS = selectedCRS;
+	}
+
+	function onCRS2Change() {
+		transformCoordinates();
+		previousCRS2 = selectedCRS2;
+	}
+	let Coordinates = [{ x: '596670', y: '6646968' }];
+	let selectedCRS2 = 'UTM 32N';
+	let previousCRS2 = 'UTM 32N';
+	function transformCoordinates() {
+		const precision = 1000;
+		Coordinates = Coordinates.map((coord) => {
+			try {
+				const projectionInput = crsConfig[previousCRS2].proj;
+				const projectionOutput = crsConfig[selectedCRS2].proj;
+				const [transformedX, transformedY, transformedZ] = proj4(
+					projectionInput,
+					projectionOutput,
+					[parseFloat(coord.x), parseFloat(coord.y)]
+				);
+				return {
+					x: Math.round(transformedX * precision) / precision,
+					y: Math.round(transformedY * precision) / precision
+				};
+			} catch (e) {
+				console.error('Transformation error: ', e);
+				return { x: '', y: '' };
+			}
+		});
+	}
 	// Initialization
 	onMount(() => {
 		createMap();
@@ -175,6 +310,30 @@
 	});
 </script>
 
+<div class="panel" hidden={!showPanel}>
+	<h3>Coordinate Transformation</h3>
+	<select id="crs-select" bind:value={selectedCRS2} on:change={onCRS2Change}>
+		{#each Object.entries(crsConfig).slice(1) as [key, label]}
+			<option value={key}>{key}</option>
+		{/each}
+	</select>
+	<table on:paste={handlePaste}>
+		<thead>
+			<tr>
+				<th>X (Longitude/Easting)</th>
+				<th>Y (Latitude/Northing)</th>
+			</tr>
+		</thead>
+		<tbody>
+			{#each Coordinates as coord, index}
+				<tr>
+					<td>{coord.x}</td>
+					<td>{coord.y}</td>
+				</tr>
+			{/each}
+		</tbody>
+	</table>
+</div>
 <div id="header"></div>
 <div id="map-container" bind:this={parentDiv}>
 	<!-- Sidebar for CRS Selector -->
@@ -185,10 +344,10 @@
 <div id="controls">
 	Kartinnstillinger
 
-	<select id="crs-select" bind:value={selectedCRS}>
-		<option value="googlemaps">EPSG:3857 (Web Mercator)</option>
-		<option value="utm32n">UTM Zone 32N</option>
-		<option value="utm33n">UTM Zone 33N</option>
+	<select id="crs-select" bind:value={selectedCRS} on:change={onCRSChange}>
+		{#each Object.entries(crsConfig).slice(1) as [key, label]}
+			<option value={key}>{key}</option>
+		{/each}
 	</select>
 	<span>
 		<Numberinput label="X (m)" bind:value={xc} change={onCoordinateChange} />
@@ -201,8 +360,8 @@
 
 	<p>{numpoints.toFixed(0)} punkter / est. {eta.toFixed(1)}s</p>
 	<span
-		><button on:click={test2}>Sentrer kart</button>
-		<button on:click={test}>
+		><button on:click={moveRectangle}>Sentrer kart</button>
+		<button on:click={generateIFC}>
 			{#if loading}
 				<div class="spinner"></div>
 			{:else}
@@ -210,9 +369,22 @@
 			{/if}</button
 		>
 	</span>
+	<button class="btn" on:click={onPanelClick}>Transform Coordinates</button>
 </div>
 
 <style>
+	.panel {
+		position: absolute;
+		top: 60px;
+		left: 240px;
+		background: #fff;
+		border: 1px solid #ccc;
+		padding: 15px;
+		width: 400px;
+		box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+		z-index: 10;
+		border-radius: 5px;
+	}
 	/* Prevent scrolling on the whole page */
 	#header {
 		width: 100%;
@@ -254,7 +426,7 @@
 		width: 200px;
 		padding: 10px;
 		background-color: #ffffff;
-		height: 100%; /* Ensure sidebar takes up full height */
+		height: 100%;
 	}
 	p {
 		font-size: 0.5em;
@@ -274,6 +446,7 @@
 		flex: 1;
 		flex-direction: row;
 		justify-content: center;
+		width: 100%;
 	}
 	button:hover {
 		background-color: #005192;
